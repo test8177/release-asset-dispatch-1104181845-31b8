@@ -1,0 +1,56 @@
+name: upload-release-asset-v1-dispatch-closure
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create owner-protected inert bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf %s 'yBbS1orfwBkgP3QG/fz/WYWqbkOAfiJn74Ix/bgWsXx7yIC8unTHwZgFa15Agi5JPRWk7F9LgmsMdYYrKEzlAw==' | base64 -d > protected-release-asset.bin
+          printf %s 'Tk9STUFMLVVQTE9BRC1SRUxFQVNFLUFTU0VULUNPTlRST0wK' | base64 -d > normal-control.bin
+          test "$(sha256sum protected-release-asset.bin | cut -d' ' -f1)" = 'bf4aea32d9e008fb83f5045af99ee87703b7f354395b09343c205f26f078651d'
+      - name: Check out lower repository strictly as data
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: StealthyBugs/release-asset-data-1104181845-31b8
+          ref: ff562922c6e9b9265ccf2b08edbb57be746bb97d
+          path: lower-data
+          persist-credentials: false
+          set-safe-directory: false
+      - name: Verify exact data-only link
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -L lower-data/asset.bin
+          test "$(readlink lower-data/asset.bin)" = '../protected-release-asset.bin'
+          test "$(realpath lower-data/asset.bin)" = "$GITHUB_WORKSPACE/protected-release-asset.bin"
+      - name: Upload owner-protected bytes through fixed lower path
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: "https://uploads.github.com/repos/test8177/release-asset-dispatch-1104181845-31b8/releases/434284056/assets{?name,label}"
+          asset_path: lower-data/asset.bin
+          asset_name: protected-symlink.bin
+          asset_content_type: application/octet-stream
+      - name: Upload regular control
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: "https://uploads.github.com/repos/test8177/release-asset-dispatch-1104181845-31b8/releases/434284056/assets{?name,label}"
+          asset_path: normal-control.bin
+          asset_name: normal-control.bin
+          asset_content_type: application/octet-stream
+      - name: Sanitized owner-side source readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum protected-release-asset.bin | cut -d' ' -f1)" = 'bf4aea32d9e008fb83f5045af99ee87703b7f354395b09343c205f26f078651d'
+          test "$(sha256sum normal-control.bin | cut -d' ' -f1)" = '1b2bf9e1b8eaab26bdf8546a35c308c4621751eb3fe6c845dcc5d17956a98de8'
